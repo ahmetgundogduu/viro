@@ -27,6 +27,9 @@
 
 #import "VRTARAnchorNode.h"
 #import "VRTARUtils.h"
+#import <ARKit/ARKit.h>
+#import <ViroKit/VROARScene.h>
+#import <ViroKit/VROARSessioniOS.h>
 
 @implementation VRTARAnchorNode
 
@@ -55,18 +58,56 @@
     }
 }
 
+- (ARImageAnchor *)liveImageAnchorFor:(std::shared_ptr<VROARAnchor>)anchor API_AVAILABLE(ios(11.3)) {
+    if (!anchor || !self.scene) return nil;
+
+    std::shared_ptr<VROARScene> arScene = std::dynamic_pointer_cast<VROARScene>(self.scene);
+    if (!arScene) return nil;
+    std::shared_ptr<VROARSession> session = arScene->getARSession();
+    if (!session) return nil;
+
+    // ViroKit can be built without RTTI. The iOS AR session is always VROARSessioniOS.
+    std::shared_ptr<VROARSessioniOS> sessioniOS = std::static_pointer_cast<VROARSessioniOS>(session);
+    ARSession *nativeSession = sessioniOS->getARSession();
+    ARFrame *frame = nativeSession.currentFrame;
+    if (!frame) return nil;
+
+    NSString *anchorId = [NSString stringWithUTF8String:anchor->getId().c_str()];
+    for (ARAnchor *candidate in frame.anchors) {
+        if (![candidate isKindOfClass:[ARImageAnchor class]]) continue;
+        if ([candidate.identifier.UUIDString isEqualToString:anchorId]) {
+            return (ARImageAnchor *)candidate;
+        }
+    }
+    return nil;
+}
+
+- (NSDictionary *)eventDictionaryForAnchor:(std::shared_ptr<VROARAnchor>)anchor {
+    NSMutableDictionary *dict = [[VRTARUtils createDictionaryFromAnchor:anchor] mutableCopy];
+    if (@available(iOS 11.3, *)) {
+        ARImageAnchor *imageAnchor = [self liveImageAnchorFor:anchor];
+        if (imageAnchor) {
+            BOOL tracked = imageAnchor.isTracked;
+            dict[@"type"] = @"image";
+            dict[@"isTracked"] = @(tracked);
+            dict[@"trackingMethod"] = tracked ? @"tracking" : @"lastKnownPose";
+        }
+    }
+    return dict;
+}
+
 #pragma mark - VROARNodeDelegateProtocol Implementation
 - (void)onARAnchorAttached:(std::shared_ptr<VROARAnchor>) anchor {
     self.isAnchored = true;
     [self handleAppearanceChange];
     if (_onAnchorFoundViro) {
-        _onAnchorFoundViro(@{ @"anchorFoundMap" : [VRTARUtils createDictionaryFromAnchor:anchor]});
+        _onAnchorFoundViro(@{ @"anchorFoundMap" : [self eventDictionaryForAnchor:anchor]});
     }
 }
 
 - (void)onARAnchorUpdated:(std::shared_ptr<VROARAnchor>) anchor {
     if (_onAnchorUpdatedViro) {
-        _onAnchorUpdatedViro(@{ @"anchorUpdatedMap" : [VRTARUtils createDictionaryFromAnchor:anchor]});
+        _onAnchorUpdatedViro(@{ @"anchorUpdatedMap" : [self eventDictionaryForAnchor:anchor]});
     }
 }
 
