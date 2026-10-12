@@ -9,9 +9,6 @@ on:
       - "ios/ViroReact.xcodeproj/**"
       - "ios/Podfile"
       - "ios/Podfile.lock"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/build-jovla-ios-bridge.yml"
 
 permissions:
   contents: write
