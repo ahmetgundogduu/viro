@@ -1,0 +1,82 @@
+name: Build Jovla iOS bridge
+
+on:
+  push:
+    branches:
+      - jovla/ios-image-tracking
+    paths:
+      - "ios/ViroReact/**"
+      - "ios/ViroReact.xcodeproj/**"
+      - "ios/Podfile"
+      - "ios/Podfile.lock"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/build-jovla-ios-bridge.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: jovla/ios-image-tracking
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods -v 1.17.0
+          pod install --project-directory=ios
+
+      - name: Build device bridge
+        run: |
+          xcodebuild \
+            -workspace ios/ViroReact.xcworkspace \
+            -scheme ViroReact \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/device"
+
+      - name: Build Intel simulator bridge
+        run: |
+          xcodebuild \
+            -workspace ios/ViroReact.xcworkspace \
+            -scheme ViroReact \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -arch x86_64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/simulator"
+
+      - name: Create universal bridge archive
+        run: |
+          lipo -create \
+            "$RUNNER_TEMP/device/libViroReact.a" \
+            "$RUNNER_TEMP/simulator/libViroReact.a" \
+            -output ios/dist/lib/libViroReact.a
+          lipo -info ios/dist/lib/libViroReact.a
+
+      - name: Commit rebuilt bridge
+        run: |
+          if git diff --quiet -- ios/dist/lib/libViroReact.a; then
+            echo "Bridge archive is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios/dist/lib/libViroReact.a
+          git commit -m "Build iOS bridge with image tracking state"
+          git push origin HEAD:jovla/ios-image-tracking

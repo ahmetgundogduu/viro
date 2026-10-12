@@ -308,7 +308,8 @@ export type ViroAnchor = {
   classification?: ViroARPlaneClassification;
   vertices?: Array<[number, number, number]>;
   // Image-specific properties (present when type === "image")
-  trackingMethod?: string;
+  trackingMethod?: "notTracking" | "tracking" | "lastKnownPose";
+  isTracked?: boolean;
 };
 
 export type ViroAnchorFoundMap = ViroAnchor;

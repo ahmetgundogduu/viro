@@ -234,6 +234,28 @@ RCT_EXPORT_METHOD(isARSupported:(RCTResponseSenderBlock)callback)
         [dict setObject:classificationString forKey:@"classification"];
     }
 
+    std::shared_ptr<VROARImageAnchor> imageAnchor = std::dynamic_pointer_cast<VROARImageAnchor>(anchor);
+    if (imageAnchor) {
+        [dict setObject:@"image" forKey:@"type"];
+
+        VROARImageTrackingMethod trackingMethod = imageAnchor->getTrackingMethod();
+        switch (trackingMethod) {
+            case VROARImageTrackingMethod::Tracking:
+                [dict setObject:@"tracking" forKey:@"trackingMethod"];
+                [dict setObject:@YES forKey:@"isTracked"];
+                break;
+            case VROARImageTrackingMethod::LastKnownPose:
+                [dict setObject:@"lastKnownPose" forKey:@"trackingMethod"];
+                [dict setObject:@NO forKey:@"isTracked"];
+                break;
+            case VROARImageTrackingMethod::NotTracking:
+            default:
+                [dict setObject:@"notTracking" forKey:@"trackingMethod"];
+                [dict setObject:@NO forKey:@"isTracked"];
+                break;
+        }
+    }
+
     return dict;
 }
 
