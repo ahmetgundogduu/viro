@@ -84,6 +84,14 @@
       saveToCameraRoll:(BOOL)saveToCameraRoll
      completionHandler:(VROViewWriteMediaFinishBlock)completionHandler;
 
+// Crops the live camera, not the 3D scene, to a portrait-normalized viewport
+// rectangle. The caller decides what that picture means.
+- (void)captureCameraRegionAtX:(CGFloat)originX
+                             y:(CGFloat)originY
+                         width:(CGFloat)width
+                        height:(CGFloat)height
+             completionHandler:(void (^)(BOOL success, NSString * _Nullable path))completionHandler;
+
 #pragma mark - Cloud Anchor Methods
 
 // Cloud Anchor completion handler types

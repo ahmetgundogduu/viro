@@ -27,6 +27,8 @@
 
 #import <ViroKit/ViroKit.h>
 #import <ViroKit/VROARSessioniOS.h>
+#import <ARKit/ARKit.h>
+#import <CoreImage/CoreImage.h>
 #import "VRTARSceneNavigator.h"
 #import "RVStudioWatermarkState.h"
 #import "VRTStudioModule.h"
@@ -519,6 +521,99 @@ static NSString * const kRVWatermarkURL =
             }
             completionHandler(YES, filePath, gifPath, errorCode);
         }];
+}
+
+- (void)captureCameraRegionAtX:(CGFloat)originX
+                             y:(CGFloat)originY
+                         width:(CGFloat)width
+                        height:(CGFloat)height
+             completionHandler:(void (^)(BOOL success, NSString * _Nullable path))completionHandler {
+    if (!_vroView || width < 0.02 || height < 0.02) {
+        completionHandler(NO, nil);
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> session = [viewAR getARSession];
+    if (!session) {
+        completionHandler(NO, nil);
+        return;
+    }
+    std::shared_ptr<VROARSessioniOS> sessioniOS = std::static_pointer_cast<VROARSessioniOS>(session);
+    ARSession *nativeSession = sessioniOS->getARSession();
+    ARFrame *frame = nativeSession.currentFrame;
+    CVPixelBufferRef pixelBuffer = frame.capturedImage;
+    if (!pixelBuffer) {
+        completionHandler(NO, nil);
+        return;
+    }
+
+    originX = MAX(0, MIN(originX, 0.98));
+    originY = MAX(0, MIN(originY, 0.98));
+    width = MAX(0.02, MIN(width, 1 - originX));
+    height = MAX(0.02, MIN(height, 1 - originY));
+
+    CIImage *cameraImage = [CIImage imageWithCVPixelBuffer:pixelBuffer];
+    CIContext *context = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
+    CGImageRef cgImage = [context createCGImage:cameraImage fromRect:cameraImage.extent];
+    if (!cgImage) {
+        completionHandler(NO, nil);
+        return;
+    }
+    // The back camera buffer is landscape. .right stands it up to match the portrait screen.
+    UIImage *upright = [UIImage imageWithCGImage:cgImage scale:1 orientation:UIImageOrientationRight];
+    CGImageRelease(cgImage);
+
+    CGSize pixelSize = upright.size;
+    CGSize viewport = [UIScreen mainScreen].bounds.size;
+    if (pixelSize.width < 2 || pixelSize.height < 2 || viewport.width < 2 || viewport.height < 2) {
+        completionHandler(NO, nil);
+        return;
+    }
+
+    CGFloat screenAspect = viewport.width / viewport.height;
+    CGFloat imageAspect = pixelSize.width / pixelSize.height;
+    CGRect visible = imageAspect > screenAspect
+        ? CGRectMake((pixelSize.width - pixelSize.height * screenAspect) / 2, 0,
+                     pixelSize.height * screenAspect, pixelSize.height)
+        : CGRectMake(0, (pixelSize.height - pixelSize.width / screenAspect) / 2,
+                     pixelSize.width, pixelSize.width / screenAspect);
+    CGRect region = CGRectMake(visible.origin.x + originX * visible.size.width,
+                               visible.origin.y + originY * visible.size.height,
+                               width * visible.size.width,
+                               height * visible.size.height);
+    region = CGRectIntersection(region, CGRectMake(0, 0, pixelSize.width, pixelSize.height));
+    if (CGRectIsEmpty(region)) {
+        completionHandler(NO, nil);
+        return;
+    }
+
+    CGFloat maxSide = 320;
+    CGFloat scale = MIN(1, maxSide / MAX(region.size.width, region.size.height));
+    CGSize outputSize = CGSizeMake(MAX(1, floor(region.size.width * scale)),
+                                   MAX(1, floor(region.size.height * scale)));
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+    format.scale = 1;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:outputSize format:format];
+    UIImage *crop = [renderer imageWithActions:^(UIGraphicsImageRendererContext *rendererContext) {
+        CGFloat drawScale = outputSize.width / region.size.width;
+        [upright drawInRect:CGRectMake(-region.origin.x * drawScale,
+                                       -region.origin.y * drawScale,
+                                       pixelSize.width * drawScale,
+                                       pixelSize.height * drawScale)];
+    }];
+    NSData *jpeg = UIImageJPEGRepresentation(crop, 0.85);
+    if (!jpeg) {
+        completionHandler(NO, nil);
+        return;
+    }
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                      [NSString stringWithFormat:@"jovla-camera-%@.jpg", [NSUUID UUID].UUIDString]];
+    if (![jpeg writeToFile:path atomically:YES]) {
+        completionHandler(NO, nil);
+        return;
+    }
+    completionHandler(YES, path);
 }
 
 - (void)setSceneView:(VRTScene *)sceneView {

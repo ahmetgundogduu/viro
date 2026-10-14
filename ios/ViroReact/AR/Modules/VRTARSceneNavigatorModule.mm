@@ -198,6 +198,35 @@ RCT_EXPORT_METHOD(takeScreenshot:(nonnull NSNumber *)reactTag
     }];
 }
 
+RCT_EXPORT_METHOD(captureCameraRegion:(nonnull NSNumber *)reactTag
+                  originX:(nonnull NSNumber *)originX
+                  originY:(nonnull NSNumber *)originY
+                  width:(nonnull NSNumber *)width
+                  height:(nonnull NSNumber *)height
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject) {
+    [self rv_withViewForTag:reactTag block:^(RCTViewRegistry *viewRegistry) {
+        VRTView *view = (VRTView *)RCTPaperViewOrCurrentView([viewRegistry viewForReactTag:reactTag]);
+        if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+            (void)reject;
+            resolve(@{ @"success": @NO });
+            return;
+        }
+        VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+        [component captureCameraRegionAtX:originX.doubleValue
+                                        y:originY.doubleValue
+                                    width:width.doubleValue
+                                   height:height.doubleValue
+                        completionHandler:^(BOOL success, NSString *path) {
+            if (success && path) {
+                resolve(@{ @"success": @YES, @"url": path });
+            } else {
+                resolve(@{ @"success": @NO });
+            }
+        }];
+    }];
+}
+
 RCT_EXPORT_METHOD(resetARSession:(nonnull NSNumber *)reactTag
                   resetTracking:(BOOL)resetTracking
                   removeAnchors:(BOOL)removeAnchors) {

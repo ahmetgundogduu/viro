@@ -429,6 +429,25 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
   };
 
   /**
+   * Returns a JPEG of the live camera inside a normalized portrait viewport
+   * rectangle. This does not decide whether an object is visible.
+   */
+  captureCameraRegion = async (
+    originX: number,
+    originY: number,
+    width: number,
+    height: number
+  ): Promise<{ success: boolean; url?: string }> => {
+    return await ViroARSceneNavigatorModule.captureCameraRegion(
+      findNodeHandle(this),
+      originX,
+      originY,
+      width,
+      height
+    );
+  };
+
+  /**
    * @todo document _project
    *
    * @param point
@@ -1720,6 +1739,7 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     stopRecording: this._stopRecording,
     getRecordingStatus: this._getRecordingStatus,
     takeScreenshot: this._takeScreenshot,
+    captureCameraRegion: this.captureCameraRegion,
     resetARSession: this._resetARSession,
     setWorldOrigin: this._setWorldOrigin,
     project: this._project,
@@ -1795,6 +1815,7 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     stopRecording: this._stopRecording,
     getRecordingStatus: this._getRecordingStatus,
     takeScreenshot: this._takeScreenshot,
+    captureCameraRegion: this.captureCameraRegion,
     resetARSession: this._resetARSession,
     setWorldOrigin: this._setWorldOrigin,
     project: this._project,
